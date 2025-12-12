@@ -1,0 +1,9 @@
+name: 'Smalk'
+type: module
+description: 'Complete GEO/GEA integration: AI Agent Tracking and AI Search Ads injection'
+core_version_requirement: ^9 || ^10 || ^11
+package: Analytics
+configure: smalk.settings
+
+dependencies:
+  - drupal:system (>=9.0)

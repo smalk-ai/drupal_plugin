@@ -1,0 +1,7 @@
+smalk.settings:
+  path: '/admin/config/services/smalk'
+  defaults:
+    _form: '\Drupal\smalk\Form\SmalkSettingsForm'
+    _title: 'Smalk Settings'
+  requirements:
+    _permission: 'administer site configuration'
