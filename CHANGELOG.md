@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Complete GEO integration for Drupal 9/10/11
 - **JavaScript Tracker**: Automatic injection of tracker.js for frontend analytics
-- **Server-Side Tracking**: AI bot detection via `/api/v1/tracking/visit`
+- **Server-Side Tracking**: AI Agent detection via `/api/v1/tracking/visit`
 - **Server-Side Ad Injection**: Replaces `<div smalk-ads>` with actual ad content
 - Admin configuration form with feature toggles
 - Path exclusion support (wildcards)

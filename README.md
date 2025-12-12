@@ -1,86 +1,67 @@
 # Smalk for Drupal
 
-Complete GEO (Generative Engine Optimization) integration module for Drupal 9/10/11.
+Complete GEO (Generative Engine Optimization) integration for Drupal 9/10/11.
 
-## Features
+## Why Server-Side?
 
-### 1. 🌐 JavaScript Tracker (Frontend Analytics)
-Automatically injects the Smalk tracker script on all pages to track browser-based visitors.
+**AI Agents (ChatGPT, Claude, Perplexity, Google AIO, etc.) do not execute JavaScript.**
 
-### 2. 🖥️ Server-Side Tracking (AI Bot Detection)
-Tracks ALL page requests server-side to detect AI bots that don't execute JavaScript:
-- ChatGPT, Claude, Perplexity
-- Google AIO, Bing AI
-- AI crawlers and scrapers
-- Search engine bots
+This means:
+- ❌ Traditional JavaScript analytics → **invisible to AI Agents**
+- ❌ Client-side ad injection → **never displayed to AI Agents**
 
-**Critical:** Without server-side tracking, you'll miss 70-90% of AI bot traffic!
+Smalk solves this with:
+- ✅ **Server-side tracking** - Detects ALL visitors including AI Agents
+- ✅ **Server-side ad injection** - Ads are in the HTML before it reaches the AI Agent
 
-### 3. 📊 AI Search Ads (Server-Side Injection)
-Injects contextual ads directly into HTML responses. Ads are included in the page when it arrives to the user - no client-side loading.
+**Result:** Publishers can finally monetize AI Agent traffic.
+
+## What This Module Does
+
+Once installed and configured, the module automatically:
+
+1. **Injects the JavaScript tracker** on every page (for browser visitors)
+2. **Sends server-side tracking** for every request (for AI Agent detection)
+3. **Replaces `<div smalk-ads>` elements** with actual ad content before sending the page
+
+No additional code required - it just works.
 
 ## Requirements
 
 - Drupal 9.x, 10.x, or 11.x
-- PHP 8.0 or higher
-- Guzzle HTTP Client (included with Drupal core)
+- PHP 8.0+
+- Smalk account ([app.smalk.ai](https://app.smalk.ai))
 
 ## Installation
 
-### Option 1: Manual Installation
-
-1. Download from [GitHub releases](https://github.com/smalk-ai/drupal-plugin/releases)
-2. Extract to `modules/contrib/smalk`
-3. Clear Drupal caches
-
-### Enable the Module
+### Step 1: Install the Module
 
 ```bash
+# Download and place in modules/contrib/smalk
 drush en smalk -y
 drush cr
 ```
 
-Or via admin UI: **Extend → Find "Smalk" → Check → Install**
+Or via admin UI: **Extend → Find "Smalk" → Install**
 
-## Configuration
+### Step 2: Configure
 
-Navigate to **Administration → Configuration → Web services → Smalk**
+Go to **Administration → Configuration → Web services → Smalk**
 
 Or: `/admin/config/services/smalk`
 
-### Required Settings
+Enter your credentials:
 
-| Setting | Description |
-|---------|-------------|
-| **Project Key** | Your Smalk project UUID. Found in Dashboard → Integrations |
-| **API Key** | Your API key for server-side requests. Found in Dashboard → Settings → API Keys |
+| Setting | Where to Find |
+|---------|---------------|
+| **Project Key** | Dashboard → Integrations |
+| **API Key** | Dashboard → Settings → API Keys |
 
-### Feature Toggles
+**That's it for tracking!** Your site is now tracking AI Agents.
 
-| Feature | Default | Description |
-|---------|---------|-------------|
-| Enable module | ✅ On | Master switch |
-| Enable Tracking | ✅ On | JS tracker + server-side tracking |
-| Enable AI Search Ads | ✅ On | Server-side ad injection |
+### Step 3: Add Ad Placements (Optional)
 
-## How It Works
-
-### Automatic Tracking
-
-Once configured, the module automatically:
-
-1. **Injects tracker.js** on every page:
-```html
-<script src="https://api.smalk.ai/tracker.js?PROJECT_KEY=your-project-key" async></script>
-```
-
-2. **Sends server-side tracking** for every request to detect AI bots
-
-**No additional setup required for tracking!**
-
-### Ad Placement (Server-Side Injection)
-
-Add the `smalk-ads` attribute to a div where you want ads:
+Add the `smalk-ads` attribute wherever you want ads to appear:
 
 ```html
 <div smalk-ads></div>
@@ -91,19 +72,13 @@ For multiple placements, add unique IDs:
 ```html
 <div smalk-ads id="header-ad"></div>
 <div smalk-ads id="sidebar-ad"></div>
-<div smalk-ads id="footer-ad"></div>
+<div smalk-ads id="content-ad"></div>
 ```
 
-The module replaces these divs with actual ad content **before** the page is sent to the user.
-
-## Usage Examples
-
-### Twig Template
+#### In Twig Templates
 
 ```twig
 <article>
-  <h1>{{ node.title.value }}</h1>
-  
   {{ '<div smalk-ads id="article-top"></div>'|raw }}
   
   {{ content.body }}
@@ -112,59 +87,57 @@ The module replaces these divs with actual ad content **before** the page is sen
 </article>
 ```
 
-### Custom Block
+#### As a Custom Block
 
 1. Go to **Structure → Block layout → Custom block library**
-2. Create a new block with **Full HTML** format
+2. Create a block with **Full HTML** format
 3. Add: `<div smalk-ads id="sidebar-ad"></div>`
-4. Place the block in your desired region
+4. Place in your desired region
 
-## Architecture
+## How It Works
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  User Request                    │
+│              Visitor requests page               │
+│         (Human browser OR AI Agent)              │
 └──────────────────────┬──────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────┐
-│         SmalkTrackingSubscriber                  │
-│         (KernelEvents::REQUEST, priority 100)    │
-│                                                  │
-│  • Sends tracking to Smalk API                   │
-│  • Fire-and-forget (non-blocking)               │
+│         1. Server-Side Tracking                  │
+│         Sends visit data to Smalk API            │
+│         (detects AI Agents immediately)          │
 └──────────────────────┬──────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────┐
-│              Drupal renders page                 │
-│              (with <div smalk-ads> elements)     │
+│         2. Drupal renders the page               │
+│         (with <div smalk-ads> placeholders)      │
 └──────────────────────┬──────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────┐
-│         SmalkAdsResponseSubscriber               │
-│         (KernelEvents::RESPONSE, priority -100)  │
-│                                                  │
-│  • Finds <div smalk-ads> elements                │
-│  • Fetches ad content from API                   │
-│  • Replaces divs with actual ads                │
+│         3. Server-Side Ad Injection              │
+│         Replaces <div smalk-ads> with real ads   │
 └──────────────────────┬──────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────┐
-│         Complete HTML sent to user               │
-│         (with ads already in place)              │
+│         Complete HTML sent to visitor            │
+│         (ads already in place - no JS needed)    │
 └─────────────────────────────────────────────────┘
 ```
 
 ## Troubleshooting
 
-### Tracking Not Working
+### Check Your Configuration
 
-1. **Verify credentials**: Check Project Key and API Key are correct
-2. **Enable debug mode**: Check Drupal logs for details
-3. **Test API**:
+```bash
+drush watchdog:show smalk
+```
+
+### Verify API Connection
+
 ```bash
 curl -X POST https://api.smalk.ai/api/v1/tracking/visit \
   -H "Authorization: Api-Key YOUR_API_KEY" \
@@ -172,41 +145,12 @@ curl -X POST https://api.smalk.ai/api/v1/tracking/visit \
   -d '{"request_path":"/test","request_method":"GET","request_headers":{"User-Agent":"Test"}}'
 ```
 
-### Ads Not Appearing
+### Ads Not Appearing?
 
-1. **Check feature toggles**: Both "Enable module" and "Enable AI Search Ads" must be on
-2. **Verify HTML syntax**: Use `<div smalk-ads></div>` (not self-closing)
-3. **Check excluded paths**: Ensure the page isn't excluded
-4. **Check ad availability**: You may not have active campaigns
-
-### View Logs
-
-```bash
-drush watchdog:show smalk
-```
-
-## Module Files
-
-```
-smalk/
-├── smalk.info.yml
-├── smalk.module
-├── smalk.services.yml
-├── smalk.routing.yml
-├── smalk.links.menu.yml
-├── config/
-│   ├── install/smalk.settings.yml
-│   └── schema/smalk.schema.yml
-├── src/
-│   ├── EventSubscriber/
-│   │   ├── SmalkTrackingSubscriber.php
-│   │   └── SmalkAdsResponseSubscriber.php
-│   └── Form/
-│       └── SmalkSettingsForm.php
-├── README.md
-├── CHANGELOG.md
-└── LICENSE.txt
-```
+1. Verify both Project Key and API Key are set
+2. Ensure "Enable AI Search Ads" is checked
+3. Check you have active ad campaigns in your Smalk dashboard
+4. Make sure the div uses the attribute format: `<div smalk-ads></div>` (not self-closing)
 
 ## Support
 

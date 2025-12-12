@@ -23,7 +23,7 @@ function smalk_help($route_name, RouteMatchInterface $route_match) {
       $output .= '<p>' . t('The Smalk module provides complete GEO (Generative Engine Optimization) integration including:') . '</p>';
       $output .= '<ul>';
       $output .= '<li>' . t('<strong>JavaScript Tracker</strong>: Automatically adds the Smalk tracker script to all pages for frontend analytics.') . '</li>';
-      $output .= '<li>' . t('<strong>Server-Side Tracking</strong>: Tracks all page visits including AI bots that don\'t execute JavaScript.') . '</li>';
+      $output .= '<li>' . t('<strong>Server-Side Tracking</strong>: Tracks all page visits including AI Agents that don\'t execute JavaScript.') . '</li>';
       $output .= '<li>' . t('<strong>AI Search Ads</strong>: Server-side injection of contextual ads into &lt;div smalk-ads&gt;&lt;/div&gt; elements.') . '</li>';
       $output .= '</ul>';
       $output .= '<h3>' . t('Configuration') . '</h3>';

@@ -18,7 +18,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * Subscribes to kernel request events to track visits server-side.
  *
  * This subscriber captures ALL incoming requests and sends tracking data
- * to the Smalk API. This is critical for detecting AI bots that don't
+ * to the Smalk API. This is critical for detecting AI Agents that don't
  * execute JavaScript (ChatGPT, Perplexity, Claude, etc.).
  *
  * Key features:

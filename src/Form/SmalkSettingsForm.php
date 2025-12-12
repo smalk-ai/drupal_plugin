@@ -12,7 +12,7 @@ use Drupal\Core\Form\FormStateInterface;
  *
  * Provides settings for:
  * - JavaScript tracker injection (frontend analytics)
- * - Server-side tracking (AI bot detection)
+ * - Server-side tracking (AI Agent detection)
  * - Server-side AI Search Ads injection
  */
 class SmalkSettingsForm extends ConfigFormBase {
@@ -45,7 +45,7 @@ class SmalkSettingsForm extends ConfigFormBase {
           <p>' . $this->t('The Smalk module provides complete GEO (Generative Engine Optimization) integration:') . '</p>
           <ul>
             <li><strong>' . $this->t('JavaScript Tracker') . '</strong>: ' . $this->t('Frontend analytics for browser-based visitors.') . '</li>
-            <li><strong>' . $this->t('Server-Side Tracking') . '</strong>: ' . $this->t('Detects AI bots that don\'t execute JavaScript (ChatGPT, Perplexity, Claude, etc.).') . '</li>
+            <li><strong>' . $this->t('Server-Side Tracking') . '</strong>: ' . $this->t('Detects AI Agents that don\'t execute JavaScript (ChatGPT, Perplexity, Claude, etc.).') . '</li>
             <li><strong>' . $this->t('AI Search Ads') . '</strong>: ' . $this->t('Server-side injection of contextual ads into HTML responses.') . '</li>
           </ul>
           <p>' . $this->t('Get your API credentials in the <a href="@dashboard" target="_blank">Smalk Dashboard</a>.', [
@@ -98,7 +98,7 @@ class SmalkSettingsForm extends ConfigFormBase {
     $form['features']['tracking_enabled'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable Tracking'),
-      '#description' => $this->t('Inject the JavaScript tracker and send server-side tracking for AI bot detection.'),
+      '#description' => $this->t('Inject the JavaScript tracker and send server-side tracking for AI Agent detection.'),
       '#default_value' => $config->get('tracking_enabled') ?? TRUE,
       '#states' => [
         'disabled' => [
@@ -182,7 +182,7 @@ class SmalkSettingsForm extends ConfigFormBase {
         <p>' . $this->t('Once enabled, the module automatically:') . '</p>
         <ol>
           <li>' . $this->t('Injects the JavaScript tracker on all pages for frontend analytics') . '</li>
-          <li>' . $this->t('Sends server-side tracking requests for every page visit (detects AI bots)') . '</li>
+          <li>' . $this->t('Sends server-side tracking requests for every page visit (detects AI Agents)') . '</li>
         </ol>
         <p><strong>' . $this->t('No additional setup required for tracking!') . '</strong></p>
 
