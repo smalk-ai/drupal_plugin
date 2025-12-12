@@ -1,0 +1,14 @@
+services:
+  # Server-side tracking subscriber (runs on every request)
+  smalk.tracking_subscriber:
+    class: Drupal\smalk\EventSubscriber\SmalkTrackingSubscriber
+    arguments: ['@config.factory', '@http_client', '@logger.factory', '@request_stack']
+    tags:
+      - { name: event_subscriber }
+
+  # Ad injection subscriber (runs on HTML responses)
+  smalk.response_subscriber:
+    class: Drupal\smalk\EventSubscriber\SmalkAdsResponseSubscriber
+    arguments: ['@config.factory', '@http_client', '@logger.factory', '@request_stack']
+    tags:
+      - { name: event_subscriber }

@@ -1,0 +1,6 @@
+smalk.settings:
+  title: 'Smalk'
+  description: 'Configure Smalk AI Agent Tracking and Ads settings.'
+  route_name: smalk.settings
+  parent: system.admin_config_services
+  weight: 10
