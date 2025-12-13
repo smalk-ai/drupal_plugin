@@ -56,8 +56,8 @@ function smalk_page_attachments(array &$attachments) {
     return;
   }
   
-  $project_key = $config->get('project_key');
-  if (empty($project_key)) {
+  $workspace_key = $config->get('workspace_key');
+  if (empty($workspace_key)) {
     return;
   }
   
@@ -76,7 +76,7 @@ function smalk_page_attachments(array &$attachments) {
       '#type' => 'html_tag',
       '#tag' => 'script',
       '#attributes' => [
-        'src' => $tracker_url . '?PROJECT_KEY=' . $project_key,
+        'src' => $tracker_url . '?PROJECT_KEY=' . $workspace_key,
         'async' => TRUE,
       ],
     ],

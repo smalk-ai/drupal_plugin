@@ -113,12 +113,20 @@ class SmalkAdsResponseSubscriber implements EventSubscriberInterface {
     }
 
     // Check for required credentials.
-    $projectKey = $config->get('project_key');
+    $workspaceKey = $config->get('workspace_key');
     $apiKey = $config->get('api_key');
 
-    if (empty($projectKey) || empty($apiKey)) {
+    if (empty($workspaceKey) || empty($apiKey)) {
       if ($config->get('debug_mode')) {
-        $this->logger->warning('Smalk: Missing project_key or api_key.');
+        $this->logger->warning('Smalk: Missing workspace_key or api_key.');
+      }
+      return;
+    }
+
+    // Check if publisher is activated.
+    if (!$config->get('publisher_activated')) {
+      if ($config->get('debug_mode')) {
+        $this->logger->info('Smalk: Publisher not activated, skipping ad injection.');
       }
       return;
     }
@@ -152,7 +160,7 @@ class SmalkAdsResponseSubscriber implements EventSubscriberInterface {
       $content,
       $currentUrl,
       $pageUrl,
-      $projectKey,
+      $workspaceKey,
       $apiKey,
       $request->headers->get('User-Agent', ''),
       $request->headers->get('Referer', ''),
@@ -210,7 +218,7 @@ class SmalkAdsResponseSubscriber implements EventSubscriberInterface {
     string $html,
     string $currentUrl,
     string $pageUrl,
-    string $projectKey,
+    string $workspaceKey,
     string $apiKey,
     string $userAgent,
     string $referer,
@@ -232,7 +240,7 @@ class SmalkAdsResponseSubscriber implements EventSubscriberInterface {
         $adContent = $this->fetchAdContent(
           $currentUrl,
           $pageUrl,
-          $projectKey,
+          $workspaceKey,
           $apiKey,
           $selectorId,
           $userAgent,
@@ -270,7 +278,7 @@ class SmalkAdsResponseSubscriber implements EventSubscriberInterface {
   protected function fetchAdContent(
     string $currentUrl,
     string $pageUrl,
-    string $projectKey,
+    string $workspaceKey,
     string $apiKey,
     ?string $selectorId,
     string $userAgent,
@@ -280,7 +288,7 @@ class SmalkAdsResponseSubscriber implements EventSubscriberInterface {
   ): ?string {
     try {
       $payload = [
-        'project_key' => $projectKey,
+        'project_key' => $workspaceKey,
         'user_agent' => $userAgent,
         'referer' => $referer,
         'client_ip' => $clientIp,

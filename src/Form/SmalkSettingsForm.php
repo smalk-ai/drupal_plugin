@@ -6,16 +6,34 @@ namespace Drupal\smalk\Form;
 
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use GuzzleHttp\ClientInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Configure Smalk settings.
  *
- * Provides settings for:
- * - JavaScript tracker injection (frontend analytics)
- * - Server-side tracking (AI Agent detection)
- * - Server-side AI Search Ads injection
+ * Only requires API Key - workspace info is fetched automatically.
  */
 class SmalkSettingsForm extends ConfigFormBase {
+
+  /**
+   * Smalk API URL for workspace/project info.
+   */
+  private const PROJECTS_API_URL = 'https://api.smalk.ai/api/v1/projects/';
+
+  /**
+   * The HTTP client.
+   */
+  protected ClientInterface $httpClient;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container) {
+    $instance = parent::create($container);
+    $instance->httpClient = $container->get('http_client');
+    return $instance;
+  }
 
   /**
    * {@inheritdoc}
@@ -42,45 +60,61 @@ class SmalkSettingsForm extends ConfigFormBase {
       '#type' => 'markup',
       '#markup' => '
         <div class="messages messages--info">
-          <p>' . $this->t('The Smalk module provides complete GEO (Generative Engine Optimization) integration:') . '</p>
-          <ul>
-            <li><strong>' . $this->t('JavaScript Tracker') . '</strong>: ' . $this->t('Frontend analytics for browser-based visitors.') . '</li>
-            <li><strong>' . $this->t('Server-Side Tracking') . '</strong>: ' . $this->t('Detects AI Agents that don\'t execute JavaScript (ChatGPT, Perplexity, Claude, etc.).') . '</li>
-            <li><strong>' . $this->t('AI Search Ads') . '</strong>: ' . $this->t('Server-side injection of contextual ads into HTML responses.') . '</li>
-          </ul>
-          <p>' . $this->t('Get your API credentials in the <a href="@dashboard" target="_blank">Smalk Dashboard</a>.', [
-            '@dashboard' => 'https://app.smalk.ai',
-          ]) . '</p>
+          <p><strong>' . $this->t('Why Server-Side?') . '</strong></p>
+          <p>' . $this->t('AI Agents (ChatGPT, Claude, Perplexity, etc.) do NOT execute JavaScript. Traditional analytics and ads are invisible to them.') . '</p>
+          <p>' . $this->t('Smalk provides server-side tracking and ad injection so publishers can monetize AI Agent traffic.') . '</p>
         </div>
       ',
     ];
 
-    // API Credentials fieldset.
+    // API Key fieldset.
     $form['credentials'] = [
       '#type' => 'fieldset',
-      '#title' => $this->t('API Credentials'),
-    ];
-
-    $form['credentials']['project_key'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Project Key'),
-      '#description' => $this->t('Your Smalk project key (UUID format). Used for the JavaScript tracker. Found in Dashboard → Integrations.'),
-      '#default_value' => $config->get('project_key'),
-      '#required' => TRUE,
-      '#maxlength' => 64,
-      '#attributes' => [
-        'placeholder' => 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-      ],
+      '#title' => $this->t('API Key'),
+      '#description' => $this->t('Enter your API Key from the <a href="@dashboard" target="_blank">Smalk Dashboard</a> → Settings → API Keys.', [
+        '@dashboard' => 'https://app.smalk.ai',
+      ]),
     ];
 
     $form['credentials']['api_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('API Key'),
-      '#description' => $this->t('Your Smalk API key for server-side requests. Found in Dashboard → Settings → API Keys.'),
+      '#description' => $this->t('Your Smalk API Key. Workspace info will be fetched automatically.'),
       '#default_value' => $config->get('api_key'),
       '#required' => TRUE,
       '#maxlength' => 128,
     ];
+
+    // Display workspace info if configured.
+    $workspaceName = $config->get('workspace_name');
+    $publisherActivated = $config->get('publisher_activated');
+    
+    if (!empty($workspaceName)) {
+      $publisherStatus = $publisherActivated 
+        ? '<span style="color: green;">✓ ' . $this->t('Active') . '</span>' 
+        : '<span style="color: orange;">⚠ ' . $this->t('Not activated') . '</span>';
+      
+      $form['workspace_info'] = [
+        '#type' => 'fieldset',
+        '#title' => $this->t('Workspace Info'),
+        '#attributes' => ['style' => 'background: #f5f5f5; border-radius: 4px;'],
+      ];
+      
+      $form['workspace_info']['info'] = [
+        '#type' => 'markup',
+        '#markup' => '
+          <p><strong>' . $this->t('Workspace:') . '</strong> ' . htmlspecialchars($workspaceName) . '</p>
+          <p><strong>' . $this->t('Publisher Status:') . '</strong> ' . $publisherStatus . '</p>
+        ',
+      ];
+      
+      if (!$publisherActivated) {
+        $form['workspace_info']['publisher_note'] = [
+          '#type' => 'markup',
+          '#markup' => '<p class="description">' . $this->t('Activate Publisher in your Smalk Dashboard to enable ad injection.') . '</p>',
+        ];
+      }
+    }
 
     // Feature toggles fieldset.
     $form['features'] = [
@@ -91,49 +125,28 @@ class SmalkSettingsForm extends ConfigFormBase {
     $form['features']['enabled'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable module'),
-      '#description' => $this->t('Master switch. Disable to turn off all features without uninstalling.'),
+      '#description' => $this->t('Master switch. Disable to turn off all features.'),
       '#default_value' => $config->get('enabled') ?? TRUE,
     ];
 
     $form['features']['tracking_enabled'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable Tracking'),
-      '#description' => $this->t('Inject the JavaScript tracker and send server-side tracking for AI Agent detection.'),
+      '#description' => $this->t('JavaScript tracker + server-side AI Agent detection.'),
       '#default_value' => $config->get('tracking_enabled') ?? TRUE,
       '#states' => [
-        'disabled' => [
-          ':input[name="enabled"]' => ['checked' => FALSE],
-        ],
+        'disabled' => [':input[name="enabled"]' => ['checked' => FALSE]],
       ],
     ];
 
     $form['features']['ads_enabled'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable AI Search Ads'),
-      '#description' => $this->t('Server-side injection of contextual ads into &lt;div smalk-ads&gt; elements.'),
+      '#description' => $this->t('Server-side injection of ads into &lt;div smalk-ads&gt; elements. Requires Publisher to be activated.'),
       '#default_value' => $config->get('ads_enabled') ?? TRUE,
       '#states' => [
-        'disabled' => [
-          ':input[name="enabled"]' => ['checked' => FALSE],
-        ],
+        'disabled' => [':input[name="enabled"]' => ['checked' => FALSE]],
       ],
-    ];
-
-    // Performance settings fieldset.
-    $form['performance'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Performance Settings'),
-    ];
-
-    $form['performance']['api_timeout'] = [
-      '#type' => 'number',
-      '#title' => $this->t('API Timeout (seconds)'),
-      '#description' => $this->t('Maximum time to wait for API responses. Recommended: 0.25 (250ms).'),
-      '#default_value' => $config->get('api_timeout') ?: 0.25,
-      '#min' => 0.1,
-      '#max' => 5,
-      '#step' => 0.05,
-      '#required' => TRUE,
     ];
 
     // Advanced settings fieldset.
@@ -143,61 +156,54 @@ class SmalkSettingsForm extends ConfigFormBase {
       '#open' => FALSE,
     ];
 
+    $form['advanced']['api_timeout'] = [
+      '#type' => 'number',
+      '#title' => $this->t('API Timeout (seconds)'),
+      '#description' => $this->t('Maximum time to wait for API responses. Recommended: 0.25'),
+      '#default_value' => $config->get('api_timeout') ?: 0.25,
+      '#min' => 0.1,
+      '#max' => 5,
+      '#step' => 0.05,
+    ];
+
     $form['advanced']['exclude_admin_pages'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Exclude admin pages'),
-      '#description' => $this->t('Don\'t track or inject ads on admin pages.'),
       '#default_value' => $config->get('exclude_admin_pages') ?? TRUE,
     ];
 
     $form['advanced']['excluded_paths'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Additional excluded paths'),
-      '#description' => $this->t('Enter paths to exclude from tracking and ad injection, one per line. Use * as a wildcard.'),
+      '#description' => $this->t('One path per line. Use * as wildcard.'),
       '#default_value' => $config->get('excluded_paths'),
-      '#rows' => 5,
-      '#attributes' => [
-        'placeholder' => "/user/*\n/api/*\n/cron",
-      ],
+      '#rows' => 3,
     ];
 
     $form['advanced']['debug_mode'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable debug mode'),
-      '#description' => $this->t('Log detailed information to Drupal\'s watchdog. Useful for troubleshooting.'),
+      '#description' => $this->t('Log detailed info to Drupal watchdog.'),
       '#default_value' => $config->get('debug_mode'),
     ];
 
     // Usage instructions.
     $form['usage'] = [
       '#type' => 'details',
-      '#title' => $this->t('Usage Instructions'),
+      '#title' => $this->t('Ad Placement Instructions'),
       '#open' => FALSE,
     ];
 
     $form['usage']['instructions'] = [
       '#type' => 'markup',
       '#markup' => '
-        <h4>' . $this->t('How Tracking Works') . '</h4>
-        <p>' . $this->t('Once enabled, the module automatically:') . '</p>
-        <ol>
-          <li>' . $this->t('Injects the JavaScript tracker on all pages for frontend analytics') . '</li>
-          <li>' . $this->t('Sends server-side tracking requests for every page visit (detects AI Agents)') . '</li>
-        </ol>
-        <p><strong>' . $this->t('No additional setup required for tracking!') . '</strong></p>
-
-        <h4>' . $this->t('How to Add Ad Placements') . '</h4>
-        <p>' . $this->t('Ads are injected server-side directly into the HTML. Add this markup where you want ads:') . '</p>
+        <p>' . $this->t('Add this HTML where you want ads to appear:') . '</p>
         <pre>&lt;div smalk-ads&gt;&lt;/div&gt;</pre>
-
-        <h4>' . $this->t('Multiple Placements Per Page') . '</h4>
         <p>' . $this->t('For multiple placements, add unique IDs:') . '</p>
         <pre>&lt;div smalk-ads id="header-ad"&gt;&lt;/div&gt;
-&lt;div smalk-ads id="sidebar-ad"&gt;&lt;/div&gt;
-&lt;div smalk-ads id="footer-ad"&gt;&lt;/div&gt;</pre>
-
-        <h4>' . $this->t('Using with Twig Templates') . '</h4>
-        <pre>{{ \'&lt;div smalk-ads id="article-ad"&gt;&lt;/div&gt;\'|raw }}</pre>
+&lt;div smalk-ads id="sidebar-ad"&gt;&lt;/div&gt;</pre>
+        <p>' . $this->t('In Twig templates:') . '</p>
+        <pre>{{ \'&lt;div smalk-ads&gt;&lt;/div&gt;\'|raw }}</pre>
       ',
     ];
 
@@ -210,41 +216,93 @@ class SmalkSettingsForm extends ConfigFormBase {
   public function validateForm(array &$form, FormStateInterface $form_state): void {
     parent::validateForm($form, $form_state);
 
-    // Validate project_key format (UUID).
-    $projectKey = $form_state->getValue('project_key');
-    if (!empty($projectKey) && !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $projectKey)) {
-      $form_state->setErrorByName('project_key', $this->t('The Project Key must be a valid UUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).'));
+    $apiKey = trim($form_state->getValue('api_key'));
+    
+    if (empty($apiKey)) {
+      return;
     }
 
-    // Validate timeout range.
-    $timeout = $form_state->getValue('api_timeout');
-    if ($timeout < 0.1 || $timeout > 5) {
-      $form_state->setErrorByName('api_timeout', $this->t('API timeout must be between 0.1 and 5 seconds.'));
+    // Fetch workspace info to validate API key.
+    $workspaceInfo = $this->fetchWorkspaceInfo($apiKey);
+    
+    if ($workspaceInfo === NULL) {
+      $form_state->setErrorByName('api_key', $this->t('Invalid API Key or could not connect to Smalk API.'));
+      return;
     }
+
+    // Store workspace info in form state for submit handler.
+    $form_state->set('workspace_info', $workspaceInfo);
   }
 
   /**
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $this->config('smalk.settings')
-      ->set('project_key', trim($form_state->getValue('project_key')))
-      ->set('api_key', trim($form_state->getValue('api_key')))
-      ->set('enabled', (bool) $form_state->getValue('enabled'))
-      ->set('tracking_enabled', (bool) $form_state->getValue('tracking_enabled'))
-      ->set('ads_enabled', (bool) $form_state->getValue('ads_enabled'))
-      ->set('api_timeout', (float) $form_state->getValue('api_timeout'))
-      ->set('exclude_admin_pages', (bool) $form_state->getValue('exclude_admin_pages'))
-      ->set('excluded_paths', $form_state->getValue('excluded_paths'))
-      ->set('debug_mode', (bool) $form_state->getValue('debug_mode'))
-      ->save();
+    $workspaceInfo = $form_state->get('workspace_info');
+
+    $config = $this->config('smalk.settings');
+    $config->set('api_key', trim($form_state->getValue('api_key')));
+    
+    // Save workspace info from API.
+    if ($workspaceInfo) {
+      $config->set('workspace_key', $workspaceInfo['key'] ?? '');
+      $config->set('workspace_name', $workspaceInfo['name'] ?? '');
+      $config->set('publisher_activated', $workspaceInfo['publisher_activated'] ?? FALSE);
+    }
+    
+    $config->set('enabled', (bool) $form_state->getValue('enabled'));
+    $config->set('tracking_enabled', (bool) $form_state->getValue('tracking_enabled'));
+    $config->set('ads_enabled', (bool) $form_state->getValue('ads_enabled'));
+    $config->set('api_timeout', (float) $form_state->getValue('api_timeout'));
+    $config->set('exclude_admin_pages', (bool) $form_state->getValue('exclude_admin_pages'));
+    $config->set('excluded_paths', $form_state->getValue('excluded_paths'));
+    $config->set('debug_mode', (bool) $form_state->getValue('debug_mode'));
+    $config->save();
 
     parent::submitForm($form, $form_state);
-
-    // Clear caches to ensure settings take effect.
     drupal_flush_all_caches();
 
-    $this->messenger()->addStatus($this->t('Smalk settings have been saved and caches cleared.'));
+    $this->messenger()->addStatus($this->t('Smalk settings saved. Workspace: @name', [
+      '@name' => $workspaceInfo['name'] ?? 'Unknown',
+    ]));
+  }
+
+  /**
+   * Fetch workspace info from Smalk API.
+   *
+   * @param string $apiKey
+   *   The API key.
+   *
+   * @return array|null
+   *   Workspace info or NULL on failure.
+   */
+  protected function fetchWorkspaceInfo(string $apiKey): ?array {
+    try {
+      $response = $this->httpClient->request('GET', self::PROJECTS_API_URL, [
+        'headers' => [
+          'Authorization' => 'Api-Key ' . $apiKey,
+          'Content-Type' => 'application/json',
+        ],
+        'timeout' => 5,
+      ]);
+
+      if ($response->getStatusCode() === 200) {
+        $data = json_decode($response->getBody()->getContents(), TRUE);
+        
+        // API returns array, get first project.
+        if (is_array($data) && !empty($data)) {
+          return $data[0];
+        }
+      }
+
+      return NULL;
+
+    } catch (\Exception $e) {
+      $this->logger('smalk')->warning('Failed to fetch workspace info: @message', [
+        '@message' => $e->getMessage(),
+      ]);
+      return NULL;
+    }
   }
 
 }

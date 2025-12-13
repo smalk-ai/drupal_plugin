@@ -50,14 +50,13 @@ Go to **Administration → Configuration → Web services → Smalk**
 
 Or: `/admin/config/services/smalk`
 
-Enter your credentials:
+Enter your **API Key** (found in Dashboard → Settings → API Keys).
 
-| Setting | Where to Find |
-|---------|---------------|
-| **Project Key** | Dashboard → Integrations |
-| **API Key** | Dashboard → Settings → API Keys |
+**That's it!** The workspace info is fetched automatically from the API.
 
-**That's it for tracking!** Your site is now tracking AI Agents.
+The module will display:
+- Your workspace name
+- Publisher status (whether ads are available)
 
 ### Step 3: Add Ad Placements (Optional)
 
@@ -74,6 +73,8 @@ For multiple placements, add unique IDs:
 <div smalk-ads id="sidebar-ad"></div>
 <div smalk-ads id="content-ad"></div>
 ```
+
+**Note:** Ads are only injected if Publisher is activated in your Smalk workspace.
 
 #### In Twig Templates
 
@@ -119,6 +120,7 @@ For multiple placements, add unique IDs:
 ┌─────────────────────────────────────────────────┐
 │         3. Server-Side Ad Injection              │
 │         Replaces <div smalk-ads> with real ads   │
+│         (only if Publisher is activated)         │
 └──────────────────────┬──────────────────────────┘
                        │
                        ▼
@@ -136,21 +138,13 @@ For multiple placements, add unique IDs:
 drush watchdog:show smalk
 ```
 
-### Verify API Connection
-
-```bash
-curl -X POST https://api.smalk.ai/api/v1/tracking/visit \
-  -H "Authorization: Api-Key YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"request_path":"/test","request_method":"GET","request_headers":{"User-Agent":"Test"}}'
-```
-
 ### Ads Not Appearing?
 
-1. Verify both Project Key and API Key are set
-2. Ensure "Enable AI Search Ads" is checked
-3. Check you have active ad campaigns in your Smalk dashboard
+1. **Check Publisher status**: Go to module settings and verify "Publisher Status: Active"
+2. **Activate Publisher**: If not active, go to your Smalk Dashboard to activate
+3. Ensure "Enable AI Search Ads" is checked in module settings
 4. Make sure the div uses the attribute format: `<div smalk-ads></div>` (not self-closing)
+5. Check you have active ad campaigns
 
 ## Support
 
