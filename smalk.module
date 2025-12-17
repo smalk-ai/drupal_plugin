@@ -39,6 +39,50 @@ function smalk_help($route_name, RouteMatchInterface $route_match) {
 }
 
 /**
+ * Implements hook_filter_info_alter().
+ *
+ * This allows us to modify filter definitions, but for Drupal 9/10/11,
+ * we need to use a plugin approach or configure text formats manually.
+ */
+function smalk_filter_info_alter(&$info) {
+  // Note: In Drupal 9+, filters are plugins, so this hook has limited effect.
+  // Users need to configure their text format to allow the smalk-ads attribute.
+  // See README.md for instructions.
+}
+
+/**
+ * Implements hook_ckeditor5_plugin_info_alter().
+ *
+ * Adds smalk-ads attribute to existing CKEditor5 div plugin for Drupal 10.
+ */
+function smalk_ckeditor5_plugin_info_alter(array &$plugin_definitions) {
+  // Find the core htmlDiv plugin and add smalk-ads to allowed elements.
+  if (isset($plugin_definitions['ckeditor5_htmlSupport'])) {
+    /** @var \Drupal\ckeditor5\Plugin\CKEditor5PluginDefinition $plugin */
+    $plugin = $plugin_definitions['ckeditor5_htmlSupport'];
+    $definition = $plugin->toArray();
+    
+    // Add <div smalk-ads> and <div smalk-ads id> to allowed elements if not already there.
+    $elements = $definition['drupal']['elements'] ?? [];
+    $needs_update = FALSE;
+    
+    if (!in_array('<div smalk-ads>', $elements)) {
+      $elements[] = '<div smalk-ads>';
+      $needs_update = TRUE;
+    }
+    if (!in_array('<div smalk-ads id>', $elements)) {
+      $elements[] = '<div smalk-ads id>';
+      $needs_update = TRUE;
+    }
+    
+    if ($needs_update) {
+      $definition['drupal']['elements'] = $elements;
+      $plugin_definitions['ckeditor5_htmlSupport'] = new \Drupal\ckeditor5\Plugin\CKEditor5PluginDefinition($definition);
+    }
+  }
+}
+
+/**
  * Implements hook_page_attachments().
  *
  * Adds the Smalk JavaScript tracker to all pages.
@@ -70,7 +114,7 @@ function smalk_page_attachments(array &$attachments) {
   }
   
   // Add the Smalk tracker script
-  $tracker_url = 'https://api.smalk.ai/tracker.js';
+  $tracker_url = \Drupal\smalk\Api\SmalkApi::getTrackerJsUrl();
   $attachments['#attached']['html_head'][] = [
     [
       '#type' => 'html_tag',

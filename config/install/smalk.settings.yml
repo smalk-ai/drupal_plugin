@@ -15,7 +15,7 @@ tracking_enabled: true
 ads_enabled: true
 
 # Performance settings
-api_timeout: 0.25
+api_timeout: 1.0
 
 # Exclusions
 exclude_admin_pages: true
@@ -23,6 +23,7 @@ excluded_paths: |
   /admin/*
   /user/*
   /api/*
+  /.well-known/*
 
 # Debug
 debug_mode: false

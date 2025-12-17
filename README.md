@@ -1,30 +1,8 @@
 # Smalk for Drupal
 
-Complete GEO (Generative Engine Optimization) integration for Drupal 9/10/11.
+**Monetize AI Agent traffic with server-side ads for Drupal 9/10/11.**
 
-## Why Server-Side?
-
-**AI Agents (ChatGPT, Claude, Perplexity, Google AIO, etc.) do not execute JavaScript.**
-
-This means:
-- ❌ Traditional JavaScript analytics → **invisible to AI Agents**
-- ❌ Client-side ad injection → **never displayed to AI Agents**
-
-Smalk solves this with:
-- ✅ **Server-side tracking** - Detects ALL visitors including AI Agents
-- ✅ **Server-side ad injection** - Ads are in the HTML before it reaches the AI Agent
-
-**Result:** Publishers can finally monetize AI Agent traffic.
-
-## What This Module Does
-
-Once installed and configured, the module automatically:
-
-1. **Injects the JavaScript tracker** on every page (for browser visitors)
-2. **Sends server-side tracking** for every request (for AI Agent detection)
-3. **Replaces `<div smalk-ads>` elements** with actual ad content before sending the page
-
-No additional code required - it just works.
+AI Agents (ChatGPT, Claude, Perplexity, Google AIO) don't execute JavaScript - traditional ads are invisible to them. Smalk injects ads server-side so they appear in the HTML before it reaches AI Agents.
 
 ## Requirements
 
@@ -36,120 +14,90 @@ No additional code required - it just works.
 
 ### Step 1: Install the Module
 
-```bash
-# Download and place in modules/contrib/smalk
-drush en smalk -y
-drush cr
-```
+1. Download the `smalk` folder
+2. Place it in `modules/contrib/smalk` (or `modules/custom/smalk`)
+3. Go to **Extend** (`/admin/modules`)
+4. Search for "Smalk" and check the box
+5. Click **Install**
 
-Or via admin UI: **Extend → Find "Smalk" → Install**
+### Step 2: Configure Your API Key
 
-### Step 2: Configure
+1. Go to **Configuration → Web services → Smalk** (`/admin/config/services/smalk`)
+2. Enter your API Key from [Smalk Dashboard](https://app.smalk.ai) → Settings → API Keys
+3. Click **Save configuration**
 
-Go to **Administration → Configuration → Web services → Smalk**
+Your workspace information will be fetched automatically.
 
-Or: `/admin/config/services/smalk`
+## Adding Ads to Your Content
 
-Enter your **API Key** (found in Dashboard → Settings → API Keys).
-
-**That's it!** The workspace info is fetched automatically from the API.
-
-The module will display:
-- Your workspace name
-- Publisher status (whether ads are available)
-
-### Step 3: Add Ad Placements (Optional)
-
-Add the `smalk-ads` attribute wherever you want ads to appear:
+Add this HTML where you want ads to appear:
 
 ```html
 <div smalk-ads></div>
 ```
 
-For multiple placements, add unique IDs:
+### How to Add
+
+1. **Edit** your page or article
+2. Click the **Source** button in the editor toolbar
+3. Paste `<div smalk-ads></div>` where you want the ad
+4. **Save** your content
+
+### Multiple Ad Placements
+
+Use unique IDs to distinguish different ad slots:
 
 ```html
-<div smalk-ads id="header-ad"></div>
-<div smalk-ads id="sidebar-ad"></div>
-<div smalk-ads id="content-ad"></div>
+<div smalk-ads id="article-top"></div>
+<div smalk-ads id="article-bottom"></div>
 ```
 
-**Note:** Ads are only injected if Publisher is activated in your Smalk workspace.
-
-#### In Twig Templates
+### In Twig Templates
 
 ```twig
-<article>
-  {{ '<div smalk-ads id="article-top"></div>'|raw }}
-  
-  {{ content.body }}
-  
-  {{ '<div smalk-ads id="article-bottom"></div>'|raw }}
-</article>
+{{ '<div smalk-ads></div>'|raw }}
 ```
 
-#### As a Custom Block
+### As a Block
 
 1. Go to **Structure → Block layout → Custom block library**
 2. Create a block with **Full HTML** format
 3. Add: `<div smalk-ads id="sidebar-ad"></div>`
-4. Place in your desired region
+4. Place it in your desired region
 
 ## How It Works
 
-```
-┌─────────────────────────────────────────────────┐
-│              Visitor requests page               │
-│         (Human browser OR AI Agent)              │
-└──────────────────────┬──────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────┐
-│         1. Server-Side Tracking                  │
-│         Sends visit data to Smalk API            │
-│         (detects AI Agents immediately)          │
-└──────────────────────┬──────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────┐
-│         2. Drupal renders the page               │
-│         (with <div smalk-ads> placeholders)      │
-└──────────────────────┬──────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────┐
-│         3. Server-Side Ad Injection              │
-│         Replaces <div smalk-ads> with real ads   │
-│         (only if Publisher is activated)         │
-└──────────────────────┬──────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────┐
-│         Complete HTML sent to visitor            │
-│         (ads already in place - no JS needed)    │
-└─────────────────────────────────────────────────┘
-```
+The module automatically:
+
+1. **Tracks every page visit** - Including AI Agent traffic (server-side, before cache)
+2. **Injects ads into your content** - Replaces `<div smalk-ads>` with actual ad HTML
+3. **Ensures fresh ads** - Pages with ads are not cached to enable proper ad rotation and impression tracking
 
 ## Troubleshooting
 
-### Check Your Configuration
+### Ads Not Appearing
 
-```bash
-drush watchdog:show smalk
-```
+1. Check **Publisher Status** is "Active" in module settings
+2. Verify "Enable AI Search Ads" is checked
+3. Ensure you have active ad campaigns in your Smalk Dashboard
 
-### Ads Not Appearing?
+### smalk-ads Attribute Being Stripped
 
-1. **Check Publisher status**: Go to module settings and verify "Publisher Status: Active"
-2. **Activate Publisher**: If not active, go to your Smalk Dashboard to activate
-3. Ensure "Enable AI Search Ads" is checked in module settings
-4. Make sure the div uses the attribute format: `<div smalk-ads></div>` (not self-closing)
-5. Check you have active ad campaigns
+This is configured automatically on install. If you still have issues:
+
+1. Go to **Configuration → Web services → Smalk**
+2. Open **Advanced Settings → Troubleshooting**
+3. Click **Re-configure Text Formats**
+
+### View Logs
+
+1. Go to **Reports → Recent log messages** (`/admin/reports/dblog`)
+2. Filter by type "smalk"
 
 ## Support
 
-- **Documentation**: https://smalk.ai/docs
-- **Dashboard**: https://app.smalk.ai
+- **Dashboard**: [app.smalk.ai](https://app.smalk.ai)
+- **Documentation**: [smalk.ai/docs](https://smalk.ai/docs)
 - **Support**: support@smalk.ai
 
 ## License

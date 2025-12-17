@@ -2,25 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.0] - 2024-12-12
+## [1.0.0] - 2024-12-17
 
 ### Added
 - Complete GEO integration for Drupal 9/10/11
-- **JavaScript Tracker**: Automatic injection of tracker.js for frontend analytics
-- **Server-Side Tracking**: AI Agent detection via `/api/v1/tracking/visit`
+- **Server-Side Tracking**: Every page visit tracked (including AI Agents)
 - **Server-Side Ad Injection**: Replaces `<div smalk-ads>` with actual ad content
+- **JavaScript Tracker**: Automatic injection for browser analytics
 - Admin configuration form with feature toggles
 - Path exclusion support (wildcards)
 - Debug mode for troubleshooting
-- Guzzle-based async HTTP requests
+- Automatic text format configuration on install
+
+### Technical
+- Dual HTTP middleware architecture for optimal caching behavior
+- SmalkTrackingMiddleware (priority 250): Tracks before page cache
+- SmalkAdsMiddleware (priority 100): Injects ads, disables caching for ad pages
+- SmalkAdsResponsePolicy: Prevents page cache from storing pages with ads
 
 ### Security
 - API keys stored securely in Drupal configuration
-- Only required headers sent to Smalk API (User-Agent, Referer, X-Real-IP)
+- Only required headers sent to Smalk API
 - Graceful degradation on API failures
-
----
-
-## Planned
-- Block plugin for easier placement via UI
-- Performance metrics dashboard

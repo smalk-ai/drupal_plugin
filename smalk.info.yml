@@ -7,3 +7,4 @@ configure: smalk.settings
 
 dependencies:
   - drupal:system (>=9.0)
+  - drupal:ckeditor5
