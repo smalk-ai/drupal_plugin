@@ -1,0 +1,58 @@
+# Drupal core and contrib
+/core/
+/modules/contrib/
+/themes/contrib/
+/profiles/contrib/
+/libraries/
+
+# Composer
+/vendor/
+composer.lock
+
+# Configuration
+/sites/*/settings.local.php
+/sites/*/services.yml
+/sites/*/files/
+/sites/*/private/
+
+# IDE and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+nbproject/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# PHP
+*.log
+*.cache
+
+# Drupal specific
+/sites/*/files/php/
+/sites/*/files/css/
+/sites/*/files/js/
+/sites/*/files/styles/
+/sites/simpletest/
+
+# Testing
+/phpunit.xml
+.phpunit.result.cache
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+/node_modules/
+/dist/
+/build/

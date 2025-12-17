@@ -1,0 +1,11 @@
+smalk.ckeditor5:
+  version: VERSION
+  js:
+    js/smalk.ckeditor5.js: {}
+  css:
+    component:
+      css/smalk.ckeditor5.css: {}
+  dependencies:
+    - ckeditor5/internal.drupal.ckeditor5
+
+
