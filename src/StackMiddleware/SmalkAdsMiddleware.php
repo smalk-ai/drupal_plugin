@@ -272,7 +272,10 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
           $timeout
         );
 
-        if ($adContent) {
+        // Only replace div if we have non-empty ad content.
+        // If API returns {"html": ""} or {"htm": ""}, $adContent will be NULL
+        // and the div will remain unchanged in the source code.
+        if ($adContent !== NULL && $adContent !== '') {
           // Replace only first occurrence of this specific div.
           $html = preg_replace(
             '/' . preg_quote($div, '/') . '/',
@@ -283,7 +286,7 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
           $adsInjected++;
         }
         elseif ($debugMode) {
-          $this->logger->warning('Smalk Ads: No ad content for placement @id', [
+          $this->logger->warning('Smalk Ads: No ad content for placement @id (empty response from API)', [
             '@id' => $placementId,
           ]);
         }
@@ -338,7 +341,16 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
 
       if ($response->getStatusCode() === 200) {
         $data = json_decode($response->getBody()->getContents(), TRUE);
-        return isset($data['html']) ? $data['html'] : NULL;
+        // Check for 'html' key first (standard), then 'htm' as fallback
+        $htmlContent = isset($data['html']) ? $data['html'] : (isset($data['htm']) ? $data['htm'] : NULL);
+        
+        // Return NULL if content is empty string - this ensures div is not replaced
+        // when API responds with {"html": ""} or {"htm": ""}
+        if ($htmlContent === '' || $htmlContent === NULL) {
+          return NULL;
+        }
+        
+        return $htmlContent;
       }
 
       return NULL;
@@ -370,7 +382,7 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
     $excludedPaths = $config->get('excluded_paths');
     if (empty($excludedPaths)) {
       return FALSE;
-    }
+    }∂
 
     $patterns = array_filter(array_map('trim', explode("\n", $excludedPaths)));
 
