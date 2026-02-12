@@ -48,7 +48,7 @@ class SmalkApi {
    *   The tracking API endpoint URL.
    */
   public static function getTrackingUrl(): string {
-    return self::getApiV1BaseUrl() . '/tracking/visit';
+    return self::getApiV1BaseUrl() . '/tracking/visit/';
   }
 
   /**

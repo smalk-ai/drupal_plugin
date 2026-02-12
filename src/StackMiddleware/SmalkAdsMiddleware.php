@@ -382,7 +382,7 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
     $excludedPaths = $config->get('excluded_paths');
     if (empty($excludedPaths)) {
       return FALSE;
-    }∂
+    }
 
     $patterns = array_filter(array_map('trim', explode("\n", $excludedPaths)));
 
