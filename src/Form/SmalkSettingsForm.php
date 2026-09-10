@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Drupal\smalk\Form;
 
-use GuzzleHttp\Exception\RequestException;
-use Drupal\filter\Entity\FilterFormat;
+use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Logger\LoggerChannelInterface;
+use Drupal\filter\Entity\FilterFormat;
 use Drupal\smalk\Api\SmalkApi;
 use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\RequestException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -25,11 +27,23 @@ class SmalkSettingsForm extends ConfigFormBase {
   protected ClientInterface $httpClient;
 
   /**
+   * The module handler.
+   */
+  protected ModuleHandlerInterface $moduleHandler;
+
+  /**
+   * The Smalk logger channel.
+   */
+  protected LoggerChannelInterface $logger;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
     $instance = parent::create($container);
     $instance->httpClient = $container->get('http_client');
+    $instance->moduleHandler = $container->get('module_handler');
+    $instance->logger = $container->get('logger.factory')->get('smalk');
     return $instance;
   }
 
@@ -346,7 +360,7 @@ class SmalkSettingsForm extends ConfigFormBase {
     // smalk.install owns these three helpers; the form used to carry a verbatim
     // second copy of each, and the two had already drifted (only one guarded
     // Editor::loadMultiple() on moduleExists('editor')).
-    \Drupal::moduleHandler()->loadInclude('smalk', 'install');
+    $this->moduleHandler->loadInclude('smalk', 'install');
     $updated_count = _smalk_update_text_formats();
     $ckeditor_count = _smalk_remove_redundant_sourceediting_tags();
 
@@ -368,9 +382,7 @@ class SmalkSettingsForm extends ConfigFormBase {
       foreach ($messages as $message) {
         $this->messenger()->addStatus($message);
       }
-      // Clear cache to ensure changes take effect.
-      drupal_flush_all_caches();
-      $this->messenger()->addStatus($this->t('Cache cleared. The smalk-ads attribute should now work correctly.'));
+      $this->messenger()->addStatus($this->t('The smalk-ads attribute should now work correctly.'));
     }
     else {
       // Check which text formats exist and their status.
@@ -423,7 +435,6 @@ class SmalkSettingsForm extends ConfigFormBase {
     $config->save();
 
     parent::submitForm($form, $form_state);
-    drupal_flush_all_caches();
 
     $this->messenger()->addStatus($this->t('Smalk settings saved. Workspace: @name', [
       '@name' => $workspaceInfo['name'] ?? 'Unknown',
@@ -481,20 +492,20 @@ class SmalkSettingsForm extends ConfigFormBase {
         }
 
         // Log if we got a 200 but couldn't parse the response.
-        \Drupal::logger('smalk')->warning('Smalk API returned 200 but unexpected response format. Data type: @type, Response: @response', [
+        $this->logger->warning('Smalk API returned 200 but unexpected response format. Data type: @type, Response: @response', [
           '@type' => gettype($data),
           '@response' => substr($body, 0, 500),
         ]);
       }
       elseif ($statusCode === 401 || $statusCode === 403) {
-        \Drupal::logger('smalk')->error('Smalk API authentication failed. Status: @status, Response: @response', [
+        $this->logger->error('Smalk API authentication failed. Status: @status, Response: @response', [
           '@status' => $statusCode,
           '@response' => substr($body, 0, 200),
         ]);
         return NULL;
       }
       else {
-        \Drupal::logger('smalk')->warning('Smalk API returned unexpected status: @status, Response: @response', [
+        $this->logger->warning('Smalk API returned unexpected status: @status, Response: @response', [
           '@status' => $statusCode,
           '@response' => substr($body, 0, 200),
         ]);
@@ -507,7 +518,7 @@ class SmalkSettingsForm extends ConfigFormBase {
       $statusCode = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 'N/A';
       $responseBody = $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : '';
 
-      \Drupal::logger('smalk')->error('Failed to fetch workspace info from Smalk API. Status: @status, Error: @message, Response: @response', [
+      $this->logger->error('Failed to fetch workspace info from Smalk API. Status: @status, Error: @message, Response: @response', [
         '@status' => $statusCode,
         '@message' => $e->getMessage(),
         '@response' => substr($responseBody, 0, 200),
@@ -516,7 +527,7 @@ class SmalkSettingsForm extends ConfigFormBase {
       return NULL;
     }
     catch (\Exception $e) {
-      \Drupal::logger('smalk')->error('Unexpected error fetching workspace info: @message', [
+      $this->logger->error('Unexpected error fetching workspace info: @message', [
         '@message' => $e->getMessage(),
       ]);
       return NULL;
