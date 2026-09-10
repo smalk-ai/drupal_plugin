@@ -1,0 +1,18 @@
+{
+  "name": "smalk/drupal-smalk",
+  "description": "Server-side AI agent tracking and AI search ad injection for Drupal.",
+  "type": "drupal-module",
+  "license": "GPL-2.0-or-later",
+  "homepage": "https://smalk.ai",
+  "support": {
+    "email": "support@smalk.ai",
+    "source": "https://github.com/smalk-ai/drupal_plugin"
+  },
+  "require": {
+    "php": ">=8.0",
+    "composer/installers": "^1.12 || ^2.0"
+  },
+  "extra": {
+    "installer-name": "smalk"
+  }
+}
