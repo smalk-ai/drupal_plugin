@@ -9,7 +9,6 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\smalk\Api\SmalkApi;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\ConnectException;
-use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -68,7 +67,7 @@ class SmalkTrackingMiddleware implements HttpKernelInterface {
     HttpKernelInterface $http_kernel,
     ConfigFactoryInterface $config_factory,
     ClientInterface $http_client,
-    LoggerChannelFactoryInterface $logger_factory
+    LoggerChannelFactoryInterface $logger_factory,
   ) {
     $this->httpKernel = $http_kernel;
     $this->configFactory = $config_factory;
@@ -79,9 +78,13 @@ class SmalkTrackingMiddleware implements HttpKernelInterface {
   /**
    * {@inheritdoc}
    */
-  public function handle(Request $request, $type = self::MAIN_REQUEST, $catch = TRUE): Response {
-    // Only process main requests (not subrequests).
-    if ($type !== self::MAIN_REQUEST) {
+  public function handle(Request $request, $type = 1, $catch = TRUE): Response {
+    // Symfony renamed MASTER_REQUEST to MAIN_REQUEST in 5.3 and dropped the old
+    // name in 7.0, so neither constant exists on every core we support:
+    // Drupal 9 ships Symfony 4.4 (MASTER_REQUEST only), Drupal 11 ships 7.4
+    // (MAIN_REQUEST only). Both equal 1; SUB_REQUEST (2) is the one name
+    // present in all of them, so the test is written against it.
+    if ($type === self::SUB_REQUEST) {
       return $this->httpKernel->handle($request, $type, $catch);
     }
 
@@ -118,13 +121,18 @@ class SmalkTrackingMiddleware implements HttpKernelInterface {
       return;
     }
 
+    // api_timeout is the one performance knob the settings form offers, and it
+    // was hardcoded out of this call. 1.0 is the historic value, kept as the
+    // fallback when the key is unset.
+    $timeout = (float) ($config->get('api_timeout') ?: 1.0);
+
     // Build tracking payload.
     $payload = [
       'request_path' => $currentPath,
       'request_method' => $request->getMethod(),
       'request_headers' => [
         'User-Agent' => $request->headers->get('User-Agent', ''),
-        'X-Real-IP' => $this->getClientIp($request),
+        // GDPR: client IP no longer sent (server strips X-Real-IP / X-Forwarded-For anyway).
         'Referer' => $request->headers->get('Referer', ''),
       ],
     ];
@@ -141,9 +149,11 @@ class SmalkTrackingMiddleware implements HttpKernelInterface {
         'headers' => [
           'Authorization' => 'Api-Key ' . $apiKey,
           'Content-Type' => 'application/json',
+          'X-Smalk-CMS' => 'drupal/' . \Drupal::VERSION,
+          'X-Smalk-Plugin-Version' => $this->getModuleVersion(),
         ],
-        'timeout' => 1.0,
-        'connect_timeout' => 0.5,
+        'timeout' => $timeout,
+        'connect_timeout' => min($timeout, 0.5),
       ]);
 
       if ($debugMode) {
@@ -212,21 +222,11 @@ class SmalkTrackingMiddleware implements HttpKernelInterface {
   }
 
   /**
-   * Get the client IP address from the request.
+   * Get the module version from smalk.info.yml.
    */
-  protected function getClientIp(Request $request) {
-    $forwardedFor = $request->headers->get('X-Forwarded-For');
-    if ($forwardedFor) {
-      $ips = explode(',', $forwardedFor);
-      return trim($ips[0]);
-    }
-
-    $realIp = $request->headers->get('X-Real-IP');
-    if ($realIp) {
-      return $realIp;
-    }
-
-    return $request->getClientIp() ?: '';
+  protected function getModuleVersion(): string {
+    $info = \Drupal::service('extension.list.module')->getExtensionInfo('smalk');
+    return $info['version'] ?? '';
   }
 
 }

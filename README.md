@@ -73,6 +73,19 @@ The module automatically:
 2. **Injects ads into your content** - Replaces `<div smalk-ads>` with actual ad HTML
 3. **Ensures fresh ads** - Pages with ads are not cached to enable proper ad rotation and impression tracking
 
+## IndexNow Integration
+
+The module automatically serves the IndexNow verification key file at `/{key}.txt` on your domain.
+
+### How It Works
+
+1. **Enable IndexNow** in your Smalk Dashboard (Brand Safety settings)
+2. The module syncs the key from the Smalk backend API (cached for 2 minutes)
+3. Requests to `/{key}.txt` are validated and served as plain text
+4. When ad content is updated, Smalk pings IndexNow to notify search engines
+
+No manual configuration is needed — the key is synced automatically using your existing API key.
+
 ## Troubleshooting
 
 ### Ads Not Appearing

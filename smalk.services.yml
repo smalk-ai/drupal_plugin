@@ -13,7 +13,7 @@ services:
   # request phase, but BEFORE page_cache on the response phase.
   # This allows us to:
   # 1. Inject ads into the response
-  # 2. Set X-Smalk-Ads-Injected header
+  # 2. Mark request with internal attribute for cache policy
   # 3. Response policy prevents page_cache from storing
   smalk.ads_middleware:
     class: Drupal\smalk\StackMiddleware\SmalkAdsMiddleware
@@ -23,8 +23,36 @@ services:
 
   # Response Policy to prevent page_cache from caching pages with ads.
   # This service tells Drupal's page_cache module to NOT store responses
-  # that have the X-Smalk-Ads-Injected header set.
+  # that have the _smalk_ads_injected request attribute set.
   smalk.page_cache.response_policy.smalk_ads:
     class: Drupal\smalk\PageCache\SmalkAdsResponsePolicy
     tags:
       - { name: page_cache_response_policy }
+
+  # Daily freshness sweep — bumps node `changed` for URLs serving active ads.
+  smalk.freshness_sweep:
+    class: Drupal\smalk\Cron\FreshnessSweep
+    arguments:
+      - '@config.factory'
+      - '@http_client'
+      - '@logger.factory'
+      - '@state'
+      - '@datetime.time'
+      - '@path_alias.manager'
+      - '@cache_tags.invalidator'
+      - '@extension.list.module'
+      - '@database'
+
+  # Serves the IndexNow key file at /{key}.txt. Not a route: Drupal's router
+  # cannot match a variable that is only part of a path segment (see the class
+  # docblock), so this answers ahead of RouterListener instead.
+  smalk.indexnow_key_file:
+    class: Drupal\smalk\EventSubscriber\IndexNowKeyFileSubscriber
+    arguments:
+      - '@config.factory'
+      - '@http_client'
+      - '@cache.default'
+      - '@datetime.time'
+      - '@logger.factory'
+    tags:
+      - { name: event_subscriber }

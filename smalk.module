@@ -7,9 +7,10 @@
  * This module provides:
  * 1. JavaScript tracker injection for frontend analytics
  * 2. Server-side tracking for AI Agent detection
- * 3. Server-side AI Search Ads injection into pages
+ * 3. Server-side AI Search Ads injection into pages.
  */
 
+use Drupal\smalk\Api\SmalkApi;
 use Drupal\Core\Routing\RouteMatchInterface;
 
 /**
@@ -39,82 +40,72 @@ function smalk_help($route_name, RouteMatchInterface $route_match) {
 }
 
 /**
- * Implements hook_filter_info_alter().
- *
- * This allows us to modify filter definitions, but for Drupal 9/10/11,
- * we need to use a plugin approach or configure text formats manually.
- */
-function smalk_filter_info_alter(&$info) {
-  // Note: In Drupal 9+, filters are plugins, so this hook has limited effect.
-  // Users need to configure their text format to allow the smalk-ads attribute.
-  // See README.md for instructions.
-}
-
-/**
- * Implements hook_ckeditor5_plugin_info_alter().
- *
- * Adds smalk-ads attribute to existing CKEditor5 div plugin for Drupal 10.
- */
-function smalk_ckeditor5_plugin_info_alter(array &$plugin_definitions) {
-  // Find the core htmlDiv plugin and add smalk-ads to allowed elements.
-  if (isset($plugin_definitions['ckeditor5_htmlSupport'])) {
-    /** @var \Drupal\ckeditor5\Plugin\CKEditor5PluginDefinition $plugin */
-    $plugin = $plugin_definitions['ckeditor5_htmlSupport'];
-    $definition = $plugin->toArray();
-    
-    // Add <div smalk-ads> and <div smalk-ads id> to allowed elements if not already there.
-    $elements = $definition['drupal']['elements'] ?? [];
-    $needs_update = FALSE;
-    
-    if (!in_array('<div smalk-ads>', $elements)) {
-      $elements[] = '<div smalk-ads>';
-      $needs_update = TRUE;
-    }
-    if (!in_array('<div smalk-ads id>', $elements)) {
-      $elements[] = '<div smalk-ads id>';
-      $needs_update = TRUE;
-    }
-    
-    if ($needs_update) {
-      $definition['drupal']['elements'] = $elements;
-      $plugin_definitions['ckeditor5_htmlSupport'] = new \Drupal\ckeditor5\Plugin\CKEditor5PluginDefinition($definition);
-    }
-  }
-}
-
-/**
  * Implements hook_page_attachments().
  *
  * Adds the Smalk JavaScript tracker to all pages.
  */
 function smalk_page_attachments(array &$attachments) {
   $config = \Drupal::config('smalk.settings');
-  
-  // Check if module is enabled
+
+  // Check if module is enabled.
   if (!$config->get('enabled')) {
     return;
   }
-  
-  // Check if tracking is enabled
+
+  // Check if tracking is enabled.
   if (!$config->get('tracking_enabled')) {
     return;
   }
-  
+
   $workspace_key = $config->get('workspace_key');
   if (empty($workspace_key)) {
     return;
   }
-  
-  // Skip admin pages if configured
+
+  // Skip admin pages if configured.
   if ($config->get('exclude_admin_pages')) {
     $route = \Drupal::routeMatch()->getRouteObject();
     if ($route && $route->getOption('_admin_route')) {
       return;
     }
   }
-  
-  // Add the Smalk tracker script
-  $tracker_url = \Drupal\smalk\Api\SmalkApi::getTrackerJsUrl();
+
+  // Add the Smalk tracker script.
+  $tracker_url = SmalkApi::getTrackerJsUrl();
+
+  // Preconnect saves ~50ms TLS+TCP+DNS before the async script fires.
+  // dns-prefetch is the fallback for browsers that don't honour preconnect.
+  // No `crossorigin` attribute: the <script> tag below is fetched in
+  // credentialed (no-cors) mode, so a preconnect with crossorigin=anonymous
+  // would warm the wrong connection bucket and the browser would open a
+  // second TCP+TLS socket — defeating the optimization.
+  $tracker_parts = parse_url($tracker_url);
+  if (!empty($tracker_parts['scheme']) && !empty($tracker_parts['host'])) {
+    $tracker_origin = $tracker_parts['scheme'] . '://' . $tracker_parts['host'];
+    $attachments['#attached']['html_head'][] = [
+      [
+        '#type' => 'html_tag',
+        '#tag' => 'link',
+        '#attributes' => [
+          'rel' => 'preconnect',
+          'href' => $tracker_origin,
+        ],
+      ],
+      'smalk_tracker_preconnect',
+    ];
+    $attachments['#attached']['html_head'][] = [
+      [
+        '#type' => 'html_tag',
+        '#tag' => 'link',
+        '#attributes' => [
+          'rel' => 'dns-prefetch',
+          'href' => $tracker_origin,
+        ],
+      ],
+      'smalk_tracker_dns_prefetch',
+    ];
+  }
+
   $attachments['#attached']['html_head'][] = [
     [
       '#type' => 'html_tag',
@@ -126,4 +117,11 @@ function smalk_page_attachments(array &$attachments) {
     ],
     'smalk_tracker_script',
   ];
+}
+
+/**
+ * Implements hook_cron().
+ */
+function smalk_cron() {
+  \Drupal::service('smalk.freshness_sweep')->run();
 }

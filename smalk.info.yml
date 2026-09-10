@@ -4,7 +4,15 @@ description: 'Complete GEO/GEA integration: AI Agent Tracking and AI Search Ads 
 core_version_requirement: ^9 || ^10 || ^11
 package: Analytics
 configure: smalk.settings
+# FreshnessSweep uses constructor property promotion (PHP 8.0). Drupal 9
+# still allows PHP 7.3, so declare the floor or the module installs and then
+# fatals on the first cron run.
+php: 8.0
 
+# ckeditor5 is deliberately NOT a dependency: it does not exist in core before
+# 9.3 (install refused) and is experimental on 9.3/9.4 (force-enabling it on a
+# CKEditor 4 site). The CKEditor 5 plugin under src/Plugin/ is only discovered
+# when the site enables ckeditor5 itself, which is the correct coupling.
 dependencies:
-  - drupal:system (>=9.0)
-  - drupal:ckeditor5
+  - drupal:filter
+  - drupal:node

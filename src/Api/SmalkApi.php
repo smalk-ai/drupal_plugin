@@ -11,6 +11,7 @@ class SmalkApi {
    * Base URL for the Smalk API.
    */
   const API_BASE_URL = 'https://api.smalk.ai';
+
   /**
    * Get the base API URL.
    *
@@ -68,7 +69,28 @@ class SmalkApi {
    *   The tracker JavaScript URL.
    */
   public static function getTrackerJsUrl(): string {
-    return self::API_BASE_URL . '/tracker.js';
+    // tracker.js is a static bundle served from the global edge CDN
+    // (cdn.smalk.ai) for low latency worldwide — decoupled from API_BASE_URL,
+    // which stays on the origin for the dynamic tracking API.
+    return 'https://cdn.smalk.ai/tracker.js';
+  }
+
+  /**
+   * Get the IndexNow key API endpoint.
+   *
+   * @return string
+   *   The IndexNow key API endpoint URL.
+   */
+  public static function getIndexNowKeyUrl(): string {
+    return self::getApiV1BaseUrl() . '/indexnow-key/';
+  }
+
+  /**
+   * Get the active-ad-urls endpoint for a given project.
+   */
+  public static function getActiveAdUrlsUrl(string $projectId, bool $flat = FALSE): string {
+    $url = self::getApiV1BaseUrl() . '/projects/' . rawurlencode($projectId) . '/ads/inventory/active-ad-urls/';
+    return $flat ? $url . '?flat=true' : $url;
   }
 
 }

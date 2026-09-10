@@ -10,7 +10,6 @@ use Drupal\smalk\Api\SmalkApi;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Exception\RequestException;
-use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -84,7 +83,7 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
     HttpKernelInterface $http_kernel,
     ConfigFactoryInterface $config_factory,
     ClientInterface $http_client,
-    LoggerChannelFactoryInterface $logger_factory
+    LoggerChannelFactoryInterface $logger_factory,
   ) {
     $this->httpKernel = $http_kernel;
     $this->configFactory = $config_factory;
@@ -95,9 +94,13 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
   /**
    * {@inheritdoc}
    */
-  public function handle(Request $request, $type = self::MAIN_REQUEST, $catch = TRUE): Response {
-    // Only process main requests (not subrequests).
-    if ($type !== self::MAIN_REQUEST) {
+  public function handle(Request $request, $type = 1, $catch = TRUE): Response {
+    // Symfony renamed MASTER_REQUEST to MAIN_REQUEST in 5.3 and dropped the old
+    // name in 7.0, so neither constant exists on every core we support:
+    // Drupal 9 ships Symfony 4.4 (MASTER_REQUEST only), Drupal 11 ships 7.4
+    // (MAIN_REQUEST only). Both equal 1; SUB_REQUEST (2) is the one name
+    // present in all of them, so the test is written against it.
+    if ($type === self::SUB_REQUEST) {
       return $this->httpKernel->handle($request, $type, $catch);
     }
 
@@ -188,7 +191,10 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
     $currentUrl = $request->getSchemeAndHttpHost() . $request->getRequestUri();
     $pageUrl = $request->getPathInfo();
 
-    $apiTimeout = (float) $config->get('api_timeout') ?: 0.25;
+    // 1.0 is what config/install ships and what the settings form displays as
+    // its default; this used to fall back to 0.25, so a site whose value was
+    // empty served ads on a quarter of the budget the screen promised it.
+    $apiTimeout = (float) ($config->get('api_timeout') ?: 1.0);
 
     // Inject ads.
     $modifiedContent = $this->processAdInjection(
@@ -199,31 +205,41 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
       $apiKey,
       $request->headers->get('User-Agent', ''),
       $request->headers->get('Referer', ''),
-      $this->getClientIp($request),
       $apiTimeout,
       $debugMode
     );
 
+    // An unfilled placeholder is not an ad: if the API served nothing, leave the
+    // page exactly as the kernel rendered it, cacheable. Marking it otherwise
+    // made every page carrying an empty <div smalk-ads> uncacheable for ever and
+    // emitted a fresh Last-Modified on each hit, which is the very signal the
+    // freshness sweep exists to control.
+    if ($modifiedContent === $content) {
+      if ($debugMode) {
+        $this->logger->debug('Smalk Ads: placeholder(s) found but no ad content served - leaving @url cacheable', [
+          '@url' => $request->getRequestUri(),
+        ]);
+      }
+      return $response;
+    }
+
     // Update response.
     $response->setContent($modifiedContent);
 
-    // Mark response as containing injected ads.
-    $response->headers->set('X-Smalk-Ads-Injected', 'true');
+    // Mark request as containing injected ads (internal signal for page cache policy).
+    $request->attributes->set('_smalk_ads_injected', TRUE);
 
-    // CRITICAL: Disable caching for pages with ads.
-    // This ensures every request fetches fresh ads for accurate impression tracking.
-    // These headers are set BEFORE page_cache sees the response (we're at priority 100).
+    // Allow crawlers to store and index, but force revalidation on every request.
+    // REMOVED: no-store (prevents LLM crawlers from indexing the page).
+    // REMOVED: Expires 1978 and Pragma (HTTP/1.0 legacy).
     $response->setPrivate();
     $response->setMaxAge(0);
-    $response->headers->addCacheControlDirective('no-cache', true);
-    $response->headers->addCacheControlDirective('no-store', true);
-    $response->headers->addCacheControlDirective('must-revalidate', true);
+    $response->headers->addCacheControlDirective('no-cache', TRUE);
+    $response->headers->addCacheControlDirective('must-revalidate', TRUE);
 
-    // Also set Expires header to ensure proxy caches don't store.
-    $response->headers->set('Expires', 'Sun, 19 Nov 1978 05:00:00 GMT');
-
-    // Pragma for HTTP/1.0 compatibility.
-    $response->headers->set('Pragma', 'no-cache');
+    // Last-Modified = current time signals page was just modified (ad injected).
+    // Crawlers can use If-Modified-Since on next visit.
+    $response->headers->set('Last-Modified', gmdate('D, d M Y H:i:s') . ' GMT');
 
     if ($debugMode) {
       $this->logger->info('Smalk Ads: Disabled caching for page with ads - @url', [
@@ -245,9 +261,8 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
     $apiKey,
     $userAgent,
     $referer,
-    $clientIp,
     $timeout,
-    $debugMode
+    $debugMode,
   ) {
     $adsInjected = 0;
 
@@ -268,7 +283,6 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
           $placementId,
           $userAgent,
           $referer,
-          $clientIp,
           $timeout
         );
 
@@ -276,14 +290,15 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
         // If API returns {"html": ""} or {"htm": ""}, $adContent will be NULL
         // and the div will remain unchanged in the source code.
         if ($adContent !== NULL && $adContent !== '') {
-          // Replace only first occurrence of this specific div.
-          $html = preg_replace(
-            '/' . preg_quote($div, '/') . '/',
-            $adContent,
-            $html,
-            1
-          );
-          $adsInjected++;
+          // substr_replace, not preg_replace: the ad copy is the REPLACEMENT
+          // string, so preg_replace reads $0/$1/\1 inside it as backreferences
+          // and a price like "$1,000" is served as ",000". This also skips
+          // compiling a pattern for a literal match we already located.
+          $pos = strpos($html, $div);
+          if ($pos !== FALSE) {
+            $html = substr_replace($html, $adContent, $pos, strlen($div));
+            $adsInjected++;
+          }
         }
         elseif ($debugMode) {
           $this->logger->warning('Smalk Ads: No ad content for placement @id (empty response from API)', [
@@ -314,15 +329,15 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
     $placementId,
     $userAgent,
     $referer,
-    $clientIp,
-    $timeout
+    $timeout,
   ) {
     try {
       $payload = [
         'project_key' => $workspaceKey,
         'user_agent' => $userAgent,
+        // GDPR: no client IP is collected or sent; the server drops it anyway
+        // (2026-07-22, TF1 audit).
         'referer' => $referer,
-        'client_ip' => $clientIp,
         'current_url' => $currentUrl,
         'page_url' => $pageUrl,
         'placement_id' => $placementId,
@@ -334,6 +349,8 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
         'headers' => [
           'Authorization' => 'Api-Key ' . $apiKey,
           'Content-Type' => 'application/json',
+          'X-Smalk-CMS' => 'drupal/' . \Drupal::VERSION,
+          'X-Smalk-Plugin-Version' => $this->getModuleVersion(),
         ],
         'timeout' => $timeout,
         'connect_timeout' => $timeout,
@@ -341,15 +358,15 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
 
       if ($response->getStatusCode() === 200) {
         $data = json_decode($response->getBody()->getContents(), TRUE);
-        // Check for 'html' key first (standard), then 'htm' as fallback
-        $htmlContent = isset($data['html']) ? $data['html'] : (isset($data['htm']) ? $data['htm'] : NULL);
-        
+        // Check for 'html' key first (standard), then 'htm' as fallback.
+        $htmlContent = $data['html'] ?? ($data['htm'] ?? NULL);
+
         // Return NULL if content is empty string - this ensures div is not replaced
-        // when API responds with {"html": ""} or {"htm": ""}
+        // when API responds with {"html": ""} or {"htm": ""}.
         if ($htmlContent === '' || $htmlContent === NULL) {
           return NULL;
         }
-        
+
         return $htmlContent;
       }
 
@@ -397,21 +414,11 @@ class SmalkAdsMiddleware implements HttpKernelInterface {
   }
 
   /**
-   * Get the client IP address from the request.
+   * Get the module version from smalk.info.yml.
    */
-  protected function getClientIp(Request $request) {
-    $forwardedFor = $request->headers->get('X-Forwarded-For');
-    if ($forwardedFor) {
-      $ips = explode(',', $forwardedFor);
-      return trim($ips[0]);
-    }
-
-    $realIp = $request->headers->get('X-Real-IP');
-    if ($realIp) {
-      return $realIp;
-    }
-
-    return $request->getClientIp() ?: '';
+  protected function getModuleVersion(): string {
+    $info = \Drupal::service('extension.list.module')->getExtensionInfo('smalk');
+    return $info['version'] ?? '';
   }
 
 }

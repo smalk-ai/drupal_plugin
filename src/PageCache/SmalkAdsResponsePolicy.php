@@ -11,7 +11,7 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Response policy that prevents caching pages with Smalk ads.
  *
- * This policy checks if a response has the X-Smalk-Ads-Injected header
+ * This policy checks if the request was marked by SmalkAdsMiddleware
  * and tells page_cache to NOT store those responses.
  */
 class SmalkAdsResponsePolicy implements ResponsePolicyInterface {
@@ -21,7 +21,7 @@ class SmalkAdsResponsePolicy implements ResponsePolicyInterface {
    */
   public function check(Response $response, Request $request) {
     // Prevent caching pages with injected ads to ensure fresh ad content.
-    if ($response->headers->get('X-Smalk-Ads-Injected') === 'true') {
+    if ($request->attributes->get('_smalk_ads_injected') === TRUE) {
       return static::DENY;
     }
 

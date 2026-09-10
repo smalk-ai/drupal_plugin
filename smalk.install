@@ -17,10 +17,75 @@ function smalk_install() {
   // Update all existing text formats to allow smalk-ads attribute.
   _smalk_update_text_formats();
 
-  // Update CKEditor 5 configurations to allow smalk-ads in Source Editing.
-  _smalk_update_ckeditor5_configs();
+  // Strip the tags a previous release wrote into Source Editing; the
+  // CKEditor 5 plugin supplies them and core rejects the duplicate.
+  _smalk_remove_redundant_sourceediting_tags();
 
-  \Drupal::messenger()->addStatus(t('Smalk module installed. The smalk-ads attribute has been automatically added to all text formats and CKEditor 5 configurations.'));
+  \Drupal::messenger()->addStatus(t('Smalk module installed. The smalk-ads attribute has been added to every text format. CKEditor 5 gets it from the Smalk Ads plugin, so no editor configuration was changed.'));
+}
+
+/**
+ * Implements hook_uninstall().
+ *
+ * Smalk_install() widens every filter_html format's allowed_html, which is
+ * security-relevant config belonging to another module. Leaving <div smalk-ads>
+ * behind for ever after the module is gone is not ours to decide, so take it
+ * back out.
+ */
+function smalk_uninstall() {
+  foreach (FilterFormat::loadMultiple() as $format) {
+    $config = $format->toArray();
+    if (empty($config['filters']['filter_html']['status'])) {
+      continue;
+    }
+
+    $settings = $config['filters']['filter_html']['settings'] ?? [];
+    $allowed_html = $settings['allowed_html'] ?? '';
+    $cleaned = _smalk_remove_attribute_from_tag($allowed_html, 'div', 'smalk-ads');
+    if ($cleaned === $allowed_html) {
+      continue;
+    }
+
+    $settings['allowed_html'] = $cleaned;
+    $format->setFilterConfig('filter_html', ['settings' => $settings] + $config['filters']['filter_html']);
+    $format->save();
+  }
+
+  _smalk_remove_redundant_sourceediting_tags();
+}
+
+/**
+ * Drops one attribute from one tag inside an allowed_html string.
+ *
+ * The inverse of _smalk_add_attribute_to_tag(). A tag left with no attribute at
+ * all is kept as a bare <tag>, never deleted: the site may well have allowed
+ * <div> before Smalk existed.
+ *
+ * @param string $allowed_html
+ *   The filter_html allowed_html string.
+ * @param string $tag
+ *   The tag name, without angle brackets.
+ * @param string $attribute
+ *   The attribute to remove.
+ *
+ * @return string
+ *   The allowed_html string without that attribute.
+ */
+function _smalk_remove_attribute_from_tag($allowed_html, $tag, $attribute) {
+  $pattern = '/<' . preg_quote($tag, '/') . '(\s[^>]*)?>/';
+
+  return preg_replace_callback($pattern, function ($matches) use ($tag, $attribute) {
+    $attributes = trim($matches[1] ?? '');
+    if ($attributes === '') {
+      return $matches[0];
+    }
+
+    $kept = array_filter(preg_split('/\s+/', $attributes), function ($candidate) use ($attribute) {
+      return $candidate !== $attribute;
+    });
+
+    return $kept ? '<' . $tag . ' ' . implode(' ', $kept) . '>' : '<' . $tag . '>';
+  }, $allowed_html, 1);
 }
 
 /**
@@ -31,50 +96,50 @@ function smalk_install() {
  */
 function _smalk_update_text_formats() {
   $updated_count = 0;
-  
+
   // Load all filter formats.
   $formats = FilterFormat::loadMultiple();
-  
+
   foreach ($formats as $format) {
     $config = $format->toArray();
-    
+
     // Check if this format uses the filter_html filter.
     if (!isset($config['filters']['filter_html']['status']) || !$config['filters']['filter_html']['status']) {
       // Skip formats that don't have filter_html enabled.
       continue;
     }
-    
+
     // Get the current allowed HTML.
     $allowed_html = $config['filters']['filter_html']['settings']['allowed_html'] ?? '';
-    
+
     // Check if smalk-ads is already present.
     if (strpos($allowed_html, 'smalk-ads') !== FALSE) {
       // Already configured, skip.
       continue;
     }
-    
+
     // Parse and update the allowed HTML to include smalk-ads on div tags.
     $updated_allowed_html = _smalk_add_attribute_to_tag($allowed_html, 'div', 'smalk-ads');
-    
+
     if ($updated_allowed_html !== $allowed_html) {
       // Get all existing filter settings.
       $existing_settings = $config['filters']['filter_html']['settings'] ?? [];
-      
+
       // Update only the allowed_html setting, preserve all others.
       $existing_settings['allowed_html'] = $updated_allowed_html;
-      
+
       // Update the filter configuration.
       $format->setFilterConfig('filter_html', [
         'status' => TRUE,
         'weight' => $config['filters']['filter_html']['weight'] ?? -10,
         'settings' => $existing_settings,
       ]);
-      
+
       $format->save();
       $updated_count++;
     }
   }
-  
+
   return $updated_count;
 }
 
@@ -94,19 +159,19 @@ function _smalk_update_text_formats() {
 function _smalk_add_attribute_to_tag($allowed_html, $tag, $attribute) {
   // Drupal's allowed HTML format is space-separated: "<tag> <tag attr1 attr2> ..."
   // Pattern to match the tag definition: <div>, <div id>, <div id class>, etc.
-  // Match <tag> or <tag followed by space-separated attributes and >
+  // Match <tag> or <tag followed by space-separated attributes and >.
   $pattern = '/<' . preg_quote($tag, '/') . '([^>]*)>/i';
-  
+
   if (preg_match($pattern, $allowed_html, $matches)) {
     // Tag exists in allowed HTML.
     $existing_attrs = trim($matches[1]);
-    
+
     // Check if attribute already exists (using word boundary to avoid partial matches).
     if (preg_match('/\b' . preg_quote($attribute, '/') . '\b/', $existing_attrs)) {
       // Attribute already present, return as-is.
       return $allowed_html;
     }
-    
+
     // Add the attribute to existing attributes.
     // If div has no attributes, add smalk-ads and id. If it has attributes, just add smalk-ads.
     if (empty($existing_attrs)) {
@@ -121,9 +186,9 @@ function _smalk_add_attribute_to_tag($allowed_html, $tag, $attribute) {
         $new_attrs = $existing_attrs . ' ' . $attribute;
       }
     }
-    
+
     $new_tag = '<' . $tag . ' ' . $new_attrs . '>';
-    
+
     // Replace the tag in the allowed HTML.
     return preg_replace($pattern, $new_tag, $allowed_html, 1);
   }
@@ -136,62 +201,46 @@ function _smalk_add_attribute_to_tag($allowed_html, $tag, $attribute) {
 }
 
 /**
- * Updates CKEditor 5 editor configurations to allow smalk-ads in Source Editing.
+ * Removes the smalk-ads tags from every CKEditor 5 Source Editing config.
+ *
+ * The CKEditor 5 plugin (\Drupal\smalk\Plugin\CKEditor5Plugin\SmalkAds) already
+ * declares <div smalk-ads> and <div smalk-ads id>, and it is enabled on every
+ * CKEditor 5 editor. Listing the same tags under Source Editing therefore trips
+ * core's SourceEditingRedundantTagsConstraint: measured on a stock Drupal 9.5.11
+ * install, the module left basic_html with 2 violations, so an admin opening
+ * Configuration > Text formats could no longer save the format at all.
  *
  * @return int
  *   Number of editor configurations updated.
  */
-function _smalk_update_ckeditor5_configs() {
+function _smalk_remove_redundant_sourceediting_tags() {
+  if (!\Drupal::moduleHandler()->moduleExists('editor')) {
+    return 0;
+  }
+
   $updated_count = 0;
+  $smalk_tags = ['<div smalk-ads>', '<div smalk-ads id>'];
 
-  // Load all editor configurations.
-  $editors = Editor::loadMultiple();
-
-  foreach ($editors as $editor) {
-    // Only process CKEditor 5 editors.
+  foreach (Editor::loadMultiple() as $editor) {
     if ($editor->getEditor() !== 'ckeditor5') {
       continue;
     }
 
     $settings = $editor->getSettings();
-    $needs_save = FALSE;
-
-    // Check if Source Editing plugin is configured.
-    if (isset($settings['plugins']['ckeditor5_sourceEditing'])) {
-      $allowed_tags = $settings['plugins']['ckeditor5_sourceEditing']['allowed_tags'] ?? [];
-
-      // Add smalk-ads div tags if not already present.
-      $tags_to_add = ['<div smalk-ads>', '<div smalk-ads id>'];
-
-      foreach ($tags_to_add as $tag) {
-        if (!in_array($tag, $allowed_tags)) {
-          $allowed_tags[] = $tag;
-          $needs_save = TRUE;
-        }
-      }
-
-      if ($needs_save) {
-        $settings['plugins']['ckeditor5_sourceEditing']['allowed_tags'] = $allowed_tags;
-        $editor->setSettings($settings);
-        $editor->save();
-        $updated_count++;
-      }
+    $allowed_tags = $settings['plugins']['ckeditor5_sourceEditing']['allowed_tags'] ?? NULL;
+    if ($allowed_tags === NULL) {
+      continue;
     }
-    else {
-      // Source Editing not enabled - try to add it with smalk-ads tags.
-      // First check if sourceEditing is in the toolbar.
-      $toolbar_items = $settings['toolbar']['items'] ?? [];
 
-      if (in_array('sourceEditing', $toolbar_items)) {
-        // Source Editing is in toolbar but not configured - initialize it.
-        $settings['plugins']['ckeditor5_sourceEditing'] = [
-          'allowed_tags' => ['<div smalk-ads>', '<div smalk-ads id>'],
-        ];
-        $editor->setSettings($settings);
-        $editor->save();
-        $updated_count++;
-      }
+    $kept = array_values(array_diff($allowed_tags, $smalk_tags));
+    if ($kept === $allowed_tags) {
+      continue;
     }
+
+    $settings['plugins']['ckeditor5_sourceEditing']['allowed_tags'] = $kept;
+    $editor->setSettings($settings);
+    $editor->save();
+    $updated_count++;
   }
 
   return $updated_count;
@@ -215,14 +264,14 @@ function smalk_update_8001() {
 /**
  * Implements hook_update_N().
  *
- * Update CKEditor 5 configurations for smalk-ads attribute.
+ * Removes the redundant Source Editing tags written by releases <= 1.1.0.
  */
 function smalk_update_8002() {
-  $updated_count = _smalk_update_ckeditor5_configs();
+  $updated_count = _smalk_remove_redundant_sourceediting_tags();
 
   if ($updated_count > 0) {
-    return t('Updated @count CKEditor 5 configuration(s) to allow smalk-ads attribute in Source Editing.', ['@count' => $updated_count]);
+    return t('Removed the redundant smalk-ads Source Editing tags from @count CKEditor 5 configuration(s); the Smalk Ads plugin supplies them.', ['@count' => $updated_count]);
   }
 
-  return t('CKEditor 5 configurations already support smalk-ads attribute or Source Editing not enabled.');
+  return t('No CKEditor 5 configuration carried the redundant smalk-ads Source Editing tags.');
 }
